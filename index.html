@@ -67,6 +67,9 @@ var Vr={},Br={};var Fr=function(){function t(t,e,n){var i=this;this._sleepAfterS
   .section { background:#fff; border-radius:14px; padding:22px; margin:18px 0; box-shadow:0 2px 12px rgba(0,0,0,.05); }
   .section h2 { font-size:20px; border-left:4px solid #1E5AA8; padding-left:10px; margin-bottom:6px; }
   .section-desc { color:#666; font-size:14px; margin-bottom:14px; }
+  .sub-h { font-size:16px; margin:22px 0 8px; font-weight:800; color:#1E5AA8; }
+  .formula { display:inline-block; background:#F1F5FB; border:1px solid #CFE0F4; border-radius:8px; padding:8px 12px; font-size:13.5px; color:#1E5AA8; font-weight:700; margin:2px 0 6px; }
+  td .contrib { font-size:11px; color:#6B6862; display:block; }
   .chart-s { font-size:14px; color:#555; background:#f0f4fa; border-radius:10px; padding:12px 14px; margin-top:12px; }
   .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:14px; }
   .card { border:1px solid #eee; border-radius:12px; padding:14px; }
@@ -192,6 +195,13 @@ var Vr={},Br={};var Fr=function(){function t(t,e,n){var i=this;this._sleepAfterS
     <p class="section-desc" data-page-node-id="fAbh6wMzxpNZ9okVRvTYEy">把六维主观评分 + 安全维度（按资质/监管背书独立给分）加权合成百分制并排名。<b data-page-node-id="zd0C1JhFHhPtVrBqpDVsKc">安全维度不拍脑袋：</b>国药准字 OTC（受 NMPA 监管、有标准说明书）= 5 分；持权威国家认证（澳洲 TGA 备案 / 加拿大 NPN + NSF，品牌公示）= 4 分。每个产品 <code data-page-node-id="vM0oGezAViwrWBiBRYhLkW">safe</code> 字段即据此标注，核验等级见页内说明。</p>
     <div id="rankChart" class="bar-box" data-page-node-id="Folau51clC4lVKV4nYkzAX"></div>
     <table id="rank" data-page-node-id="4QczaAP6frheVbdb1zFKiP"></table>
+
+    <h3 class="sub-h" data-page-node-id="scMethod">评分方法（完全透明，可逐项复算）</h3>
+    <p class="section-desc" data-page-node-id="scDesc">综合分不是手填的，而是页面脚本按下面这套规则实时算出来的。公式为：<br>
+    <code class="formula" data-page-node-node-id="fmt">综合分 = Σ(每维得分 ÷ 5 × 权重) ÷ 权重总和(1.20) × 100</code><br>
+    权重总和是 1.20 而非 1.00，所以最后一步做了归一化——「有零有整」正是这一步除出来的。下方表格里<b>每行原始分 + 折算到百分制的贡献值</b>全部由脚本从上方同一份数据算出，你把它们加起来就是综合分。</p>
+    <table id="scoreDetail" data-page-node-id="scoreDetail"></table>
+    <p class="note" data-page-node-id="scNote">注：1–5 分的主观评分与雷达图共用；安全维度按资质独立给分（国药准字 OTC=5，TGA/NPN 等权威认证=4）。模型为作者主观加权，仅供参评品内部横比，不构成医疗建议。</p>
   </div>
 
   <!-- 选购建议 -->
@@ -375,6 +385,21 @@ const ranked = products.map(p=>({p, score:composite(p)})).sort((a,b)=>b.score-a.
 document.getElementById('rank').innerHTML =
   `<tr><th>排名</th><th>产品</th><th>综合分</th><th>安全分</th><th>核验等级</th></tr>` +
   ranked.map((r,i)=>`<tr><td class="hl">#${i+1}</td><td>${r.p.name}</td><td class="hl">${r.score}</td><td>${r.p.safe}</td><td style="font-size:12px">${r.p.verify}</td></tr>`).join('');
+
+// ===== 评分明细（透明化：实时从同一份数据复算）=====
+const scoreDims = dims.concat(["安全"]);
+const WSUM = Object.values(W).reduce((a,b)=>a+b,0); // 1.20
+document.getElementById('scoreDetail').innerHTML =
+  `<tr><th>产品</th>${scoreDims.map(d=>`<th>${d}<br><span style="font-weight:400;font-size:11px">权重 ${W[d]}</span></th>`).join('')}<th>综合分</th></tr>` +
+  ranked.map(r=>{
+    const p=r.p;
+    const cells = scoreDims.map(d=>{
+      const raw = (d==="安全") ? p.safe : p.metrics[d];
+      const contrib = (raw/5)*W[d]/WSUM*100;
+      return `<td>${raw}分<span class="contrib">+${contrib.toFixed(2)}</span></td>`;
+    }).join('');
+    return `<tr><td class="hl">${p.name}</td>${cells}<td class="hl">${r.score}</td></tr>`;
+  }).join('');
 const rankChart = echarts.init(document.getElementById('rankChart'));
 rankChart.setOption({
   tooltip:{trigger:'axis'}, grid:{left:50,right:20,top:20,bottom:40},
